@@ -1,3 +1,13 @@
+---
+title: Closira AI Agent
+emoji: 💇
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Closira — Lumina Hair Studio AI Agent Backend
 
 Containerised REST API backend for the Lumina Hair Studio AI agent.

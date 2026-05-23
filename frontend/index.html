@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Closira AI Orchestration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-wrapper">
+                    <i class="ph-fill ph-sparkle"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Closira AI</h1>
+                    <span>Orchestration v2.4</span>
+                </div>
+            </div>
+            
+            <button class="btn-primary w-full mt-4" id="btn-new-session">
+                <i class="ph ph-plus"></i> New Session
+            </button>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active"><i class="ph ph-chats"></i> Active Sessions</a>
+                <a href="#" class="nav-item"><i class="ph ph-squares-four"></i> Dashboard</a>
+                <a href="#" class="nav-item"><i class="ph ph-graph"></i> System Matrix</a>
+                <a href="#" class="nav-item"><i class="ph ph-book-open"></i> Knowledge Base</a>
+                <a href="#" class="nav-item"><i class="ph ph-gear"></i> Settings</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="#" class="nav-item"><i class="ph ph-question"></i> Support</a>
+                <a href="#" class="nav-item"><i class="ph ph-sign-out"></i> Sign Out</a>
+            </div>
+        </aside>
+
+        <!-- MIDDLE COLUMN: CONTROL PANEL -->
+        <section class="control-panel">
+            <h2 class="panel-title">Session Control Panel</h2>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>LEAD DATA PAYLOAD</h3>
+                    <i class="ph ph-code"></i>
+                </div>
+                <div class="card-body bg-darker">
+                    <pre><code id="lead-data-json">{
+  "session_id": "none",
+  "intent": "pending",
+  "service": "pending",
+  "consultation": false,
+  "urgency": "low"
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3>SYSTEM STATUS MATRIX</h3>
+                    <i class="ph ph-cpu"></i>
+                </div>
+                <div class="card-body">
+                    <div class="status-row">
+                        <span>NLU Processing</span>
+                        <div class="status-indicator"><span class="text-sm">Active</span> <span class="dot active"></span></div>
+                    </div>
+                    <div class="status-row">
+                        <span>CRM Sync</span>
+                        <div class="status-indicator"><span class="text-sm">Active</span> <span class="dot active"></span></div>
+                    </div>
+                    <div class="status-row">
+                        <span>Availability DB</span>
+                        <div class="status-indicator"><span class="text-sm">Idle</span> <span class="dot"></span></div>
+                    </div>
+                    <div class="status-row">
+                        <span>Sentiment Analysis</span>
+                        <div class="status-indicator"><span class="text-sm">Idle</span> <span class="dot"></span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: LIVE SESSION -->
+        <main class="workstation">
+            <header class="workstation-header">
+                <div class="header-left">
+                    <h2>Lumina Session Workstation</h2>
+                    <nav class="header-nav">
+                        <a href="#">Overview</a>
+                        <a href="#" class="active">Logs</a>
+                        <a href="#">Metrics</a>
+                    </nav>
+                </div>
+                <div class="header-right">
+                    <button class="icon-btn"><i class="ph ph-bell"></i></button>
+                    <button class="icon-btn"><i class="ph ph-clock-counter-clockwise"></i></button>
+                    <div class="badge" id="stage-badge"><span class="dot-small"></span> [FAQ]</div>
+                </div>
+            </header>
+
+            <div class="session-content">
+                <div class="session-title-bar">
+                    <div class="avatar"><img src="https://i.pravatar.cc/150?u=lumina" alt="Avatar"></div>
+                    <div class="title-info">
+                        <h3>Lumina AI Receptionist — Live Session</h3>
+                        <span id="session-status-text">Connected • Session: pending</span>
+                    </div>
+                </div>
+
+                <div class="chat-container" id="chat-container">
+                    <div class="timestamp"><span>Today, 10:42 AM</span></div>
+                    <!-- Chat bubbles will be injected here by app.js -->
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="input-wrapper">
+                        <input type="text" id="chat-input" placeholder="Type a message or command to intercept..." autocomplete="off">
+                        <button class="btn-send" id="btn-send"><i class="ph ph-paper-plane-right"></i></button>
+                    </div>
+                    
+                    <div class="input-controls">
+                        <button class="btn-secondary" id="btn-summary"><i class="ph ph-file-text"></i> Generate CRM Summary</button>
+                        <button class="btn-secondary" id="btn-reset"><i class="ph ph-arrow-counter-clockwise"></i> Reset Session</button>
+                        <div class="toggle-group">
+                            <span>Agent Intervention Mode:</span>
+                            <label class="switch">
+                                <input type="checkbox">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for CRM Summary -->
+    <div class="modal-overlay" id="summary-modal">
+        <div class="modal-content card">
+            <div class="card-header">
+                <h3>CRM Summary Generated</h3>
+                <button class="icon-btn" id="btn-close-modal"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="card-body bg-darker">
+                <pre><code id="summary-json-content"></code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

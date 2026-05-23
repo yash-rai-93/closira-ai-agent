@@ -26,6 +26,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent import orchestrator, state
@@ -225,3 +226,11 @@ async def delete_session(session_id: str) -> dict:
     state.delete_session(session_id)
     logger.info("Session '%s' deleted.", session_id)
     return {"deleted": True, "session_id": session_id}
+
+
+# ===========================================================================
+# Frontend Serving
+# ===========================================================================
+# Mount the frontend directory so it's served at the root URL
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
