@@ -1,0 +1,56 @@
+{
+  "business_profile": {
+    "name": "Lumina Hair Studio",
+    "description": "A modern hair salon specializing in contemporary aesthetics, high-volume styling, and custom textured cuts.",
+    "contact_methods": ["WhatsApp", "Website booking portal"],
+    "operating_hours": {
+      "Monday_to_Saturday": "9:00 AM - 7:00 PM",
+      "Sunday": "Closed"
+    }
+  },
+  "services_and_pricing": [
+    {
+      "service": "Standard Cut & Style",
+      "starting_price_gbp": 45,
+      "description": "Standard wash, cut, and blow-dry."
+    },
+    {
+      "service": "Signature Textured Cuts (Wavy Shag, Soft Wolf Cut)",
+      "starting_price_gbp": 75,
+      "description": "Specialty cuts focusing on maximizing volume and movement, tailored to hair type."
+    },
+    {
+      "service": "Texture Perm / Body Wave",
+      "starting_price_gbp": 120,
+      "description": "Chemical treatment to add permanent wave and volume."
+    },
+    {
+      "service": "Initial Styling Consultation",
+      "starting_price_gbp": 0,
+      "description": "A free 15-minute consultation to discuss hair goals, assess hair type, and review model reference photos."
+    }
+  ],
+  "booking_and_policies": {
+    "how_to_book": "Appointments must be scheduled through the website portal or requested via WhatsApp.",
+    "cancellation_policy": "We require a minimum of 24 hours notice for any cancellations. Late cancellations may incur a fee.",
+    "preparation": "Clients are encouraged to bring model reference photos for textured cuts to ensure the stylist understands the desired aesthetic."
+  },
+  "escalation_triggers": [
+    {
+      "trigger_type": "complaint",
+      "action": "Apologize for the inconvenience and immediately route to the human Salon Manager."
+    },
+    {
+      "trigger_type": "medical_question",
+      "action": "State that we are stylists, not dermatologists, and escalate. (e.g., questions about severe scalp conditions or hair loss treatments)."
+    },
+    {
+      "trigger_type": "pricing_negotiation",
+      "action": "Inform the client that prices are fixed base rates, and escalate to a human agent if they persist."
+    },
+    {
+      "trigger_type": "repeated_unanswered_questions",
+      "action": "If the AI cannot answer 2 or more questions from the provided SOP, escalate to a human agent."
+    }
+  ]
+}
