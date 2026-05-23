@@ -1,0 +1,21 @@
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv
+
+# Secrets and environment files
+.env
+
+# Git metadata
+.git/
+.gitignore
+
+# Docker configuration files (already used in build step)
+Dockerfile
+docker-compose.yml
+.dockerignore
