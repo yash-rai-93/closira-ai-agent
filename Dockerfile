@@ -8,6 +8,7 @@ WORKDIR /app
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
+ENV PYTHONPATH="/app/backend"
 
 # Copy the requirements file into the container
 COPY --chown=user backend/requirements.txt .

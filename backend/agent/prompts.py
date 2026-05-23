@@ -85,7 +85,7 @@ Escalation must be triggered if ANY of the following conditions are met:
   - COMPLAINT    : The user is complaining, angry, upset, or uses aggressive/frustrated language.
   - MEDICAL      : The user asks about medical conditions, severe scalp disorders, hair loss treatments,
                    medications, or anything requiring professional medical/dermatological advice.
-  - PRICING_NEG  : The user is trying to negotiate, haggle, or discount the listed prices.
+  - PRICING_NEG  : The user is trying to negotiate, haggle, discount the listed prices, or asking to do it cheaper (e.g., offering £80 instead of £120, asking for discount/reduction).
   - OUT_OF_SCOPE : The user's question cannot be answered from salon FAQ data
                    (the system has no SOP data to answer it).
 

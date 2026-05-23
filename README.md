@@ -44,7 +44,7 @@ docker compose --profile dev up
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `GROQ_API_KEY` | ✅ | — | From [console.groq.com](https://console.groq.com) |
-| `GROQ_MODEL` | No | `llama3-70b-8192` | Use `llama3-8b-8192` for dev |
+| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Use `llama-3.1-8b-instant` for dev |
 | `HOST_PORT` | No | `8000` | Host port mapping |
 | `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins |
 
@@ -209,4 +209,4 @@ Point to the repo, set `GROQ_API_KEY` as an environment variable. Both platforms
 - [ ] Replace `state.py`'s in-memory dict with Redis for multi-instance deployments
 - [ ] Add auth middleware (API key or JWT) to `/chat` and `/summary`
 - [ ] Enable HTTPS via a reverse proxy (Nginx, Traefik, or your cloud's LB)
-- [ ] Set `GROQ_MODEL=llama3-70b-8192` in production (not the 8b dev model)
+- [ ] Set `GROQ_MODEL=llama-3.3-70b-versatile` in production (not the 8b dev model)

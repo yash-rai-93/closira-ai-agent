@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Model selection — overridable via env var
 # ---------------------------------------------------------------------------
-DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ---------------------------------------------------------------------------
 # Retry configuration

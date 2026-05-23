@@ -64,11 +64,28 @@ _BOOKING_KEYWORDS = {
 
 def _contains_booking_intent(message: str) -> bool:
     """
-    Simple keyword-scan to detect booking/availability intent.
-    Intentionally conservative — false negatives are safer than false positives
-    (we'd rather answer one more FAQ turn than interrupt a service question).
+    Detect booking/availability intent, ignoring questions about preparation,
+    cancellation policies, opening hours, general contact info, or pricing inquiries
+    unless they explicitly express booking intent.
     """
     lower = message.lower()
+    
+    # Direct exclusions (preparation, cancellation, contact details)
+    exclusions = {
+        "prepare", "preparation", "cancellation", "cancel",
+        "get in touch", "whatsapp number", "phone number"
+    }
+    if any(ex in lower for ex in exclusions):
+        return False
+        
+    # Exclude questions about pricing/info of consultations/services unless they use a booking verb
+    pricing_info_keywords = {"free", "cost", "price", "charge", "fee", "how much", "what is", "what are", "policy"}
+    booking_actions = {"book", "schedule", "reserve", "appointment", "slot", "when can"}
+    
+    if any(pk in lower for pk in pricing_info_keywords):
+        if not any(ba in lower for ba in booking_actions):
+            return False
+            
     return any(kw in lower for kw in _BOOKING_KEYWORDS)
 
 
@@ -346,7 +363,7 @@ def process_message(session_id: str, user_message: str) -> dict[str, Any]:
             # Auto-escalate per SOP rule: repeated_unanswered_questions
             reason = "Customer asked 2 or more questions outside the scope of the SOP."
             state.escalate_session(session_id, reason)
-            assistant_reply = ESCALATION_HANDOFF_MESSAGE
+            # Retain the refusal reply for this turn, but append to history and return as escalated
             state.append_message(session_id, "assistant", assistant_reply)
             return {
                 "response": assistant_reply,
