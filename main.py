@@ -1,147 +1,116 @@
 """
 main.py
 =======
-FastAPI application for the Lumina Hair Studio AI agent backend.
+FastAPI backend for the Lumina Hair Studio AI agent.
+
+Designed to be consumed by any frontend (React, Vue, mobile, etc.) via REST.
+All endpoints return JSON. CORS is configured via the ALLOWED_ORIGINS env var.
 
 Endpoints
 ---------
-POST /chat
-    Process a single user message within a session.
-    Creates the session automatically if it doesn't exist.
-
-POST /summary
-    Generate and return a structured end-of-session summary.
-
-GET  /session/{session_id}
-    (Debug/monitoring) Return raw session state — disable in production.
-
-GET  /health
-    Liveness probe for load balancers / container orchestrators.
-
-Run locally
------------
-    uvicorn main:app --reload --port 8000
-
-Or with hot-reload + verbose logging:
-    uvicorn main:app --reload --port 8000 --log-level debug
+GET  /health                    — Liveness probe
+POST /chat                      — Send a message, get a reply
+POST /summary                   — Generate end-of-session summary
+GET  /session/{session_id}      — Fetch current session state (for UI sync)
+DELETE /session/{session_id}    — Clear a session (e.g. on user logout)
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from agent import orchestrator, state
 
 # ---------------------------------------------------------------------------
-# Logging configuration — structured JSON in prod; readable text in dev
+# Load .env file (no-op if it doesn't exist — env vars already set)
+# ---------------------------------------------------------------------------
+load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
-logger = logging.getLogger("closira.main")
+logger = logging.getLogger("closira.api")
 
 # ---------------------------------------------------------------------------
-# FastAPI application setup
+# CORS — read allowed origins from env so you can tighten this per environment
+# e.g. ALLOWED_ORIGINS="https://myfrontend.com,https://staging.myfrontend.com"
+# Defaults to * for local development only.
+# ---------------------------------------------------------------------------
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
+# ---------------------------------------------------------------------------
+# App
 # ---------------------------------------------------------------------------
 app = FastAPI(
     title="Closira — Lumina Hair Studio AI Agent",
     description=(
-        "Multi-stage conversational AI backend for customer support. "
-        "Handles FAQ answering, lead qualification, escalation detection, "
-        "and session summarisation — all grounded strictly in the SOP."
+        "Multi-stage conversational AI backend. "
+        "Handles FAQ answering, lead qualification, escalation, and summarisation."
     ),
     version="1.0.0",
-    docs_url="/docs",       # Swagger UI
-    redoc_url="/redoc",     # ReDoc
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# Allow browser-based clients (e.g. a future React frontend) during development.
-# Tighten allowed_origins before deploying to production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 
 # ===========================================================================
-# Request / Response Schemas (Pydantic v2)
+# Pydantic Schemas
 # ===========================================================================
 
 class ChatRequest(BaseModel):
-    """Request body for POST /chat."""
     session_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
-        description="Unique session identifier. Auto-generated if omitted.",
+        description="Session ID. Auto-generated UUID if omitted — frontend should persist and reuse.",
         examples=["user-abc-123"],
     )
     message: str = Field(
         ...,
         min_length=1,
         max_length=2000,
-        description="The user's raw input message.",
+        description="User's message text.",
         examples=["What services do you offer?"],
     )
 
-
 class ChatResponse(BaseModel):
-    """Response body for POST /chat."""
-    response: str = Field(..., description="The AI agent's reply.")
-    current_stage: str = Field(..., description="Active pipeline stage.")
-    is_escalated: bool = Field(..., description="True if session has been escalated.")
-    escalation_reason: str | None = Field(
-        None, description="Human-readable escalation trigger, or null."
-    )
-
+    session_id: str
+    response: str
+    current_stage: str
+    is_escalated: bool
+    escalation_reason: str | None
 
 class SummaryRequest(BaseModel):
-    """Request body for POST /summary."""
-    session_id: str = Field(
-        ..., description="Session to summarise.", examples=["user-abc-123"]
-    )
+    session_id: str
 
-
-# ===========================================================================
-# Exception handlers
-# ===========================================================================
-
-@app.exception_handler(KeyError)
-async def key_error_handler(request: Request, exc: KeyError) -> JSONResponse:
-    """Return 404 for missing sessions rather than a 500."""
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"detail": str(exc)},
-    )
-
-
-@app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-    """Return 422 for validation / parse failures (e.g. LLM JSON parse error)."""
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": str(exc)},
-    )
-
-
-@app.exception_handler(RuntimeError)
-async def runtime_error_handler(request: Request, exc: RuntimeError) -> JSONResponse:
-    """Catch-all for Groq API failures — return 503 Service Unavailable."""
-    logger.error("RuntimeError: %s", exc)
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": f"Upstream LLM error: {exc}"},
-    )
+class SessionStateResponse(BaseModel):
+    session_id: str
+    current_stage: str
+    is_escalated: bool
+    escalation_reason: str | None
+    lead_data: dict
+    message_count: int
 
 
 # ===========================================================================
@@ -150,55 +119,49 @@ async def runtime_error_handler(request: Request, exc: RuntimeError) -> JSONResp
 
 @app.get("/health", tags=["Ops"])
 async def health() -> dict:
-    """
-    Liveness probe.
-    Returns 200 OK with a simple status object.
-    Container orchestrators (Kubernetes, ECS) should poll this.
-    """
-    return {"status": "ok", "service": "closira-lumina-agent"}
+    """Liveness probe. Returns 200 OK. Use this for Docker/k8s health checks."""
+    return {"status": "ok", "service": "closira-lumina-agent", "version": "1.0.0"}
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["Agent"])
 async def chat(body: ChatRequest) -> ChatResponse:
     """
-    **POST /chat** — Process one user message within a session.
+    Send a user message and receive the agent's reply.
 
-    - Creates the session automatically on first call.
-    - Runs escalation detection concurrently with reply generation.
-    - Returns the agent reply, current stage, and escalation status.
-
-    Once `is_escalated` is `true`, the session is locked and all subsequent
-    messages receive a static handoff response.
+    - Creates the session automatically on first call with a given session_id.
+    - Returns session_id in the response so the frontend can persist it.
+    - Once `is_escalated` is true, the session is locked.
     """
-    logger.info(
-        "POST /chat | session=%s | stage=%s | msg_preview=%.60s",
-        body.session_id,
-        state.get_or_create_session(body.session_id).get("current_stage"),
-        body.message,
-    )
+    logger.info("POST /chat | session=%s | msg=%.60s...", body.session_id, body.message)
 
-    result = orchestrator.process_message(
-        session_id=body.session_id,
-        user_message=body.message,
-    )
+    try:
+        result = orchestrator.process_message(
+            session_id=body.session_id,
+            user_message=body.message,
+        )
+    except RuntimeError as exc:
+        logger.error("Groq API failure: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI service temporarily unavailable: {exc}",
+        )
+    except Exception as exc:
+        logger.error("Unexpected error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred.",
+        )
 
-    return ChatResponse(**result)
+    return ChatResponse(session_id=body.session_id, **result)
 
 
 @app.post("/summary", tags=["Agent"])
 async def summary(body: SummaryRequest) -> dict[str, Any]:
     """
-    **POST /summary** — Generate a structured end-of-session summary.
+    Generate a structured end-of-session summary.
 
-    Triggers Stage 4 of the pipeline. The summary is generated fresh on each
-    call (idempotent — calling twice produces the same result for the same
-    history).
-
-    Returns a JSON object with:
-    - `customer_intent`
-    - `key_details_collected`
-    - `sop_gaps_identified`
-    - `recommended_next_action`
+    Call this when the user ends the chat, or poll it after `is_escalated = true`.
+    Returns a JSON object suitable for CRM ingestion.
     """
     logger.info("POST /summary | session=%s", body.session_id)
 
@@ -206,20 +169,29 @@ async def summary(body: SummaryRequest) -> dict[str, Any]:
     if sess is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session '{body.session_id}' does not exist.",
+            detail=f"Session '{body.session_id}' not found.",
         )
 
-    result = orchestrator.generate_summary(body.session_id)
+    try:
+        result = orchestrator.generate_summary(body.session_id)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI service temporarily unavailable: {exc}",
+        )
+
     return result
 
 
-@app.get("/session/{session_id}", tags=["Debug"])
-async def get_session_debug(session_id: str) -> dict[str, Any]:
+@app.get("/session/{session_id}", response_model=SessionStateResponse, tags=["Session"])
+async def get_session(session_id: str) -> SessionStateResponse:
     """
-    **GET /session/{session_id}** — Return raw session state for debugging.
+    Fetch the current state of a session.
 
-    ⚠️  DISABLE THIS ENDPOINT IN PRODUCTION — it exposes PII and conversation
-    history without authentication.
+    Useful for the frontend to:
+    - Re-hydrate UI state after a page refresh.
+    - Display the current stage indicator.
+    - Check escalation status.
     """
     sess = state.get_session(session_id)
     if sess is None:
@@ -227,4 +199,29 @@ async def get_session_debug(session_id: str) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session '{session_id}' not found.",
         )
-    return sess
+    return SessionStateResponse(
+        session_id=sess["session_id"],
+        current_stage=sess["current_stage"],
+        is_escalated=sess["is_escalated"],
+        escalation_reason=sess["escalation_reason"],
+        lead_data=sess["lead_data"],
+        message_count=len(sess["chat_history"]),
+    )
+
+
+@app.delete("/session/{session_id}", tags=["Session"])
+async def delete_session(session_id: str) -> dict:
+    """
+    Delete a session and all its data.
+
+    Call this when the user explicitly ends or resets the conversation.
+    """
+    sess = state.get_session(session_id)
+    if sess is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found.",
+        )
+    state.delete_session(session_id)
+    logger.info("Session '%s' deleted.", session_id)
+    return {"deleted": True, "session_id": session_id}

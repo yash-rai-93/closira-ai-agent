@@ -1,93 +1,31 @@
-# Closira — Lumina Hair Studio AI Agent
+# Closira — Lumina Hair Studio AI Agent Backend
 
-> Production-ready multi-stage conversational AI backend for a B2B SaaS customer support platform.
-
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Quick Start](#quick-start)
-3. [Dependencies](#dependencies)
-4. [Environment Variables](#environment-variables)
-5. [Running the Server](#running-the-server)
-6. [CLI Testing Tool](#cli-testing-tool)
-7. [API Contract](#api-contract)
-8. [File Structure](#file-structure)
-9. [Pipeline Stages](#pipeline-stages)
-10. [Known Limitations](#known-limitations)
-11. [Deployment Notes](#deployment-notes)
-
----
-
-## Architecture Overview
-
-```
-User (HTTP / CLI)
-      │
-      ▼
- POST /chat                      POST /summary
-      │                                │
-      ▼                                ▼
- orchestrator.py ──────── generate_summary()
-   │         │
-   │         └─── ThreadPoolExecutor ───► _run_escalation_check() [Stage 3]
-   │
-   ├─── Stage 1: FAQ Answering      ← groq_client.chat_completion()
-   ├─── Stage 2: Lead Qualification ← deterministic state machine
-   └─── Stage 4: Summary            ← groq_client.json_completion()
-         │
-         ▼
-     state.py (in-memory SESSION_STORE)
-```
+Containerised REST API backend for the Lumina Hair Studio AI agent.
+Built with FastAPI + Groq (llama3-70b). Ready to connect to any frontend.
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd closira
+# 1. Clone and enter the project
+git clone <repo-url> && cd closira
 
-# 2. Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+# 2. Create your .env from the template
+cp .env.example .env
+# → Open .env and add your GROQ_API_KEY
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Build and run (production)
+docker compose up --build
 
-# 4. Set your Groq API key
-export GROQ_API_KEY=gsk_your_key_here
-
-# 5a. Start the API server
-uvicorn main:app --reload --port 8000
-
-# 5b. OR run the CLI demo (no server needed)
-python cli.py
+# 4. API is now live at http://localhost:8000
+# 5. Swagger UI: http://localhost:8000/docs
 ```
 
----
-
-## Dependencies
-
-Create `requirements.txt` with:
-
-```
-fastapi>=0.111.0
-uvicorn[standard]>=0.29.0
-groq>=0.9.0
-pydantic>=2.7.0
-python-dotenv>=1.0.0   # optional, for .env file support
-```
-
-Install with:
+**Dev mode** (hot-reload, no rebuild needed on code changes):
 ```bash
-pip install -r requirements.txt
+docker compose --profile dev up
 ```
-
-> **Groq Python SDK**: `pip install groq`
-> Requires Python 3.10+.
 
 ---
 
@@ -95,130 +33,119 @@ pip install -r requirements.txt
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GROQ_API_KEY` | ✅ Yes | — | API key from [console.groq.com](https://console.groq.com) |
-| `GROQ_MODEL` | No | `llama3-70b-8192` | Override the Groq model. Use `llama3-8b-8192` for dev. |
+| `GROQ_API_KEY` | ✅ | — | From [console.groq.com](https://console.groq.com) |
+| `GROQ_MODEL` | No | `llama3-70b-8192` | Use `llama3-8b-8192` for dev |
+| `HOST_PORT` | No | `8000` | Host port mapping |
+| `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins |
 
-You can also use a `.env` file:
-```
-GROQ_API_KEY=gsk_...
-GROQ_MODEL=llama3-8b-8192
-```
-Then add `from dotenv import load_dotenv; load_dotenv()` at the top of `main.py` or `cli.py`.
+Set `ALLOWED_ORIGINS=https://yourfrontend.com` before deploying to production.
 
 ---
 
-## Running the Server
-
-```bash
-# Development (auto-reload on file changes)
-uvicorn main:app --reload --port 8000
-
-# Production (multi-worker)
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
-
-# With debug logging
-uvicorn main:app --reload --port 8000 --log-level debug
-```
-
-Swagger UI is available at: **http://localhost:8000/docs**
-ReDoc is available at: **http://localhost:8000/redoc**
-
----
-
-## CLI Testing Tool
-
-```bash
-python cli.py
-```
-
-The CLI runs the full agent pipeline locally without an HTTP server:
-
-```
-══════════════════════════════════════════════════════════
-  💇  Lumina Hair Studio — AI Receptionist (CLI Demo)
-══════════════════════════════════════════════════════════
-  Type your message and press Enter.
-  Type 'quit' to end the session and view a summary.
-──────────────────────────────────────────────────────────
-
-  Session ID: cli-a3f92c1b
-
-You: What's your cancellation policy?
-
-  [STAGE: FAQ]
-Agent: We require a minimum of 24 hours notice for cancellations. Late cancellations may incur a fee.
-```
-
----
-
-## API Contract
+## API Reference
 
 ### `POST /chat`
-
-Process a single user message.
+Send a user message. Creates the session automatically on first call.
 
 **Request**
 ```json
 {
   "session_id": "user-abc-123",
-  "message": "What is your cancellation policy?"
+  "message": "What services do you offer?"
 }
 ```
+Omit `session_id` on the very first request — a UUID will be generated and returned.
+**Persist the returned `session_id` in your frontend** for all subsequent turns.
 
 **Response**
 ```json
 {
-  "response": "We require a minimum of 24 hours notice for any cancellations. Late cancellations may incur a fee.",
+  "session_id": "user-abc-123",
+  "response": "We offer Standard Cut & Style from £45, Signature Textured Cuts from £75...",
   "current_stage": "faq",
   "is_escalated": false,
   "escalation_reason": null
 }
 ```
 
-**Stage values**: `"faq"` | `"lead_qualification"` | `"escalation"` | `"summary"`
+`current_stage` values: `"faq"` | `"lead_qualification"` | `"escalation"` | `"summary"`
+
+Once `is_escalated` is `true`, the session is locked. Show the user a "human agent incoming" UI state.
 
 ---
 
 ### `POST /summary`
-
-Generate a structured end-of-session summary.
+Generate a structured end-of-session summary. Call when the user closes the chat or when `is_escalated` becomes `true`.
 
 **Request**
 ```json
-{
-  "session_id": "user-abc-123"
-}
+{ "session_id": "user-abc-123" }
 ```
 
 **Response**
 ```json
 {
-  "customer_intent": "The customer wanted to book a Signature Textured Cut and was interested in a free consultation.",
+  "customer_intent": "Customer wants to book a Soft Wolf Cut and start with a free consultation.",
   "key_details_collected": {
-    "interested_service": "Signature Textured Cut (Wavy Shag)",
+    "interested_service": "Signature Textured Cut — Soft Wolf Cut",
     "wants_consultation": "Yes",
     "other_notes": null
   },
   "sop_gaps_identified": [],
-  "recommended_next_action": "Send the customer the booking portal link and WhatsApp contact to confirm their consultation appointment."
+  "recommended_next_action": "Send booking portal link and confirm consultation appointment."
 }
 ```
 
 ---
 
-### `GET /health`
+### `GET /session/{session_id}`
+Fetch current session state. Use to re-hydrate the UI after a page refresh.
 
-Liveness probe. Returns `200 OK`.
-
+**Response**
 ```json
-{ "status": "ok", "service": "closira-lumina-agent" }
+{
+  "session_id": "user-abc-123",
+  "current_stage": "faq",
+  "is_escalated": false,
+  "escalation_reason": null,
+  "lead_data": {
+    "interested_service": null,
+    "wants_consultation": null
+  },
+  "message_count": 4
+}
 ```
 
 ---
 
-### `GET /session/{session_id}` ⚠️ Debug only
+### `DELETE /session/{session_id}`
+Delete a session (e.g. on user logout or conversation reset).
 
-Returns raw session state. **Disable in production.**
+---
+
+### `GET /health`
+Liveness probe. Returns `200 OK`. Use for Docker/k8s health checks.
+
+---
+
+## Frontend Integration Notes
+
+```
+Frontend                           Backend (this repo)
+────────────────────────────────────────────────────────
+1. First message  →  POST /chat (no session_id)
+                  ←  { session_id: "abc", response: "..." }
+
+2. Store session_id in localStorage / state
+
+3. Every message  →  POST /chat { session_id: "abc", message: "..." }
+                  ←  { response, current_stage, is_escalated }
+
+4. If is_escalated → show "connecting to agent" UI + POST /summary
+
+5. On chat close  →  POST /summary  (optional, for CRM)
+                  →  DELETE /session/{id}  (cleanup)
+```
 
 ---
 
@@ -226,120 +153,50 @@ Returns raw session state. **Disable in production.**
 
 ```
 closira/
-├── main.py                    # FastAPI app, endpoints, Pydantic schemas
-├── cli.py                     # Interactive CLI demo / testing tool
-├── requirements.txt           # Python dependencies
-├── prompt_design.md           # Prompt engineering rationale
-├── README.md                  # This file
+├── main.py                 # FastAPI app — all endpoints
+├── Dockerfile              # Multi-stage production image
+├── docker-compose.yml      # Prod + dev profiles
+├── .env.example            # Copy to .env, fill GROQ_API_KEY
+├── .dockerignore
+├── requirements.txt
 │
 ├── agent/
 │   ├── __init__.py
-│   ├── state.py               # In-memory session management
-│   ├── prompts.py             # All LLM prompt templates + schemas
-│   ├── groq_client.py         # Groq API wrapper with retry logic
-│   └── orchestrator.py        # Stage routing + pipeline logic
+│   ├── state.py            # In-memory session store (swap for Redis in prod)
+│   ├── prompts.py          # LLM system prompts, SOP grounding
+│   ├── groq_client.py      # Groq API wrapper with retry logic
+│   └── orchestrator.py     # Stage routing + pipeline logic
 │
-├── data/
-│   └── sop_data.json          # Canonical SOP (single source of truth)
-│
-└── test_transcripts/
-    ├── 01_in_scope_faq.md
-    ├── 02_out_of_scope.md
-    ├── 03_escalation_trigger.md
-    ├── 04_lead_qualification.md
-    └── 05_conversation_summary.md
+└── data/
+    └── sop_data.json       # Canonical SOP — single source of truth
 ```
 
 ---
 
-## Pipeline Stages
+## Deployment
 
-| Stage | Name | Trigger | Behaviour |
-|---|---|---|---|
-| 1 | FAQ Answering | Default (all new sessions) | Answers from SOP JSON only |
-| 2 | Lead Qualification | Booking/availability keyword detected | Asks 2 scripted questions sequentially |
-| 3 | Escalation Detection | Runs on EVERY message (concurrent) | LLM classifier; locks session on trigger |
-| 4 | Summary | POST /summary or CLI quit/escalation | Returns structured JSON for CRM |
-
-### Stage Transition Diagram
-
-```
-         ┌─────────────┐
-         │    START     │
-         └──────┬──────┘
-                │
-                ▼
-         ┌─────────────┐   booking intent    ┌──────────────────────┐
-         │     FAQ      │──────────────────►  │  Lead Qualification  │
-         │  (Stage 1)   │◄──────────────────  │     (Stage 2)        │
-         └──────┬──────┘   both Qs answered   └──────────────────────┘
-                │
-                │  escalation trigger (concurrent, any stage)
-                ▼
-         ┌─────────────┐
-         │  Escalation  │
-         │  (Stage 3)   │
-         └──────┬──────┘
-                │
-                │  POST /summary or CLI quit
-                ▼
-         ┌─────────────┐
-         │   Summary    │
-         │  (Stage 4)   │
-         └─────────────┘
-```
-
----
-
-## Known Limitations
-
-1. **In-memory sessions only** — All session data is lost on server restart. Replace
-   `SESSION_STORE` dict in `state.py` with Redis for persistence.
-
-2. **No authentication** — The `/chat` and `/summary` endpoints have no auth. Any client
-   can read or write any session by guessing the `session_id`. Add API key middleware
-   or OAuth before production deployment.
-
-3. **Single-worker context window** — Chat history is appended indefinitely. For very
-   long conversations (100+ turns), the history will eventually exceed the model's
-   8,192-token context window. Implement history truncation or summarisation for production.
-
-4. **Unanswered-question detection is heuristic** — The "2 unanswered questions →
-   escalate" rule depends on the phrase "I don't have that information" appearing in the
-   model's reply. A paraphrase of that phrase would not trigger the counter. A more robust
-   implementation would use the escalation classifier with an `out_of_scope` signal.
-
-5. **Thread-based concurrency** — `ThreadPoolExecutor` works for moderate traffic but
-   will not scale to high concurrency. Migrate to `asyncio` + async Groq client for
-   high-throughput deployments.
-
-6. **No persistent lead storage** — Lead data collected in Stage 2 exists only in the
-   in-memory session. Wire `lead_data` to your CRM via a webhook in `orchestrator.py`
-   once the lead-qual sequence completes.
-
----
-
-## Deployment Notes
-
-### Docker (recommended for production)
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
-```
-
+### Docker (any host)
 ```bash
-docker build -t closira-agent .
-docker run -e GROQ_API_KEY=gsk_... -p 8000:8000 closira-agent
+docker compose up --build -d
 ```
 
-### Health Check for Load Balancers
+### Fly.io
+```bash
+fly launch --dockerfile Dockerfile
+fly secrets set GROQ_API_KEY=gsk_...
+fly deploy
 ```
-GET /health → 200 OK { "status": "ok" }
-```
-Configure your ALB/Nginx upstream to probe this endpoint every 10 seconds.
+
+### Railway / Render
+Point to the repo, set `GROQ_API_KEY` as an environment variable. Both platforms auto-detect the Dockerfile.
+
+---
+
+## Production Checklist
+
+- [ ] Set `ALLOWED_ORIGINS` to your real frontend domain
+- [ ] Set `GROQ_API_KEY` as a secret (not in the image)
+- [ ] Replace `state.py`'s in-memory dict with Redis for multi-instance deployments
+- [ ] Add auth middleware (API key or JWT) to `/chat` and `/summary`
+- [ ] Enable HTTPS via a reverse proxy (Nginx, Traefik, or your cloud's LB)
+- [ ] Set `GROQ_MODEL=llama3-70b-8192` in production (not the 8b dev model)
